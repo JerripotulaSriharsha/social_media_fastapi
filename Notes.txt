@@ -1,0 +1,36 @@
+Request Components
+1. Type/Method
+
+What action you want to perform.
+Example: GET, POST, PUT, DELETE.
+
+2. Path
+
+The specific URL or route you’re asking for.
+Example: /users/123.
+
+3. Body
+
+The data you send with the request (mainly for POST/PUT).
+Example: { "name": "Harsha" }.
+
+4. Headers
+
+Extra information sent with the request.
+Example: Authorization: Bearer <token>.
+
+Response Components
+1. Status Code
+
+Tells whether the request succeeded or failed.
+Example: 200 OK, 404 Not Found.
+
+2. Body
+
+The actual data returned by the server.
+Example: { "message": "User created" }.
+
+3. Headers
+
+Extra information the server sends back.
+Example: Content-Type: application/json.(format of the body)
