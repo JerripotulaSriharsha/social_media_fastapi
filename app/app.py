@@ -131,6 +131,89 @@ async def get_feed(
     return {"posts": posts_data}
 
 
+@app.put("/posts/{post_id}")
+async def update_post(
+    post_id: str,
+    caption: str = Form(None),
+    file: UploadFile = File(None),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    Update a post's caption and/or media file.
+    - post_id: UUID of the post to update
+    - caption: New caption (optional)
+    - file: New media file to replace existing one (optional)
+    """
+    temp_file_path = None
+    try:
+        # Convert post_id string to UUID
+        post_uuid = uuid.UUID(post_id)
+
+        # Find the post in database
+        result = await session.execute(select(Post).where(Post.id == post_uuid))
+        post = result.scalars().first()
+
+        if not post:
+            raise HTTPException(status_code=404, detail="Post not found")
+
+        # Update caption if provided
+        if caption is not None:
+            post.caption = caption
+
+        # Update file if provided
+        if file is not None:
+            # Create temporary file from uploaded file
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=os.path.splitext(file.filename)[1]
+            ) as temp_file:
+                temp_file_path = temp_file.name
+                shutil.copyfileobj(file.file, temp_file)
+
+            # Upload new file to ImageKit
+            upload_result = imagekit.upload_file(
+                file=open(temp_file_path, "rb"),
+                file_name=file.filename,
+                options=UploadFileRequestOptions(
+                    use_unique_file_name=True,
+                    tags=["backle"]
+                )
+            )
+
+            if upload_result.response_metadata.http_status_code == 200:
+                # Update post with new file information
+                post.url = upload_result.url
+                post.file_type = "video" if file.content_type.startswith("video/") else "image"
+                post.file_name = upload_result.name
+            else:
+                raise HTTPException(status_code=500, detail="Failed to upload file to ImageKit")
+
+        # Commit changes to database
+        await session.commit()
+        await session.refresh(post)
+
+        # Return updated post
+        return {
+            "id": str(post.id),
+            "caption": post.caption,
+            "url": post.url,
+            "file_type": post.file_type,
+            "file_name": post.file_name,
+            "created_at": post.created_at.isoformat()
+        }
+
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid post ID format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Clean up temporary file
+        if temp_file_path and os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
+        if file:
+            file.file.close()
+
+
 @app.delete("/posts/{post_id}")
 async def delete_post(post_id: str, session: AsyncSession = Depends(get_async_session)):
     try:
