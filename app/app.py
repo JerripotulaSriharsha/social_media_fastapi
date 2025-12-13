@@ -81,11 +81,19 @@ async def register(data: RegisterIn, session: AsyncSession = Depends(get_async_s
     await session.refresh(user)
     return {"id": str(user.id), "email": user.email}
 
+
+from fastapi.security import OAuth2PasswordRequestForm
+
 @app.post("/auth/login")
-async def login(data: LoginIn, session: AsyncSession = Depends(get_async_session)):
-    result = await session.execute(select(User).where(User.email == data.email))
-    user = result.scalars().first()
-    if not user or not pwd_context.verify(data.password, user.hashed_password):
+async def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: AsyncSession = Depends(get_async_session),
+):
+    user = await session.scalar(
+        select(User).where(User.email == form_data.username)
+    )
+
+    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(user.id)
@@ -120,7 +128,8 @@ async def upload_file(
                 caption=caption,
                 url=upload_result.url,
                 file_type="video" if file.content_type.startswith("video/") else "image",
-                file_name=upload_result.name
+                file_name=upload_result.name,
+                 user_id= user.id
             )
 
             session.add(post)
@@ -128,7 +137,7 @@ async def upload_file(
             await session.refresh(post)
             return post
     except Exception as e:
-        raise HTTPException(statuscode = 500,denial = str(e))
+        raise HTTPException(status_code = 500,detail = str(e))
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
@@ -153,7 +162,7 @@ async def get_feed(
                 "url": post.url,
                 "file_type": post.file_type,
                 "file_name": post.file_name,
-                "created_at": post.created_at.isoformat()
+                "created_at": post.created_at.isoformat(),
             }
         )
 
@@ -229,7 +238,8 @@ async def update_post(
             "url": post.url,
             "file_type": post.file_type,
             "file_name": post.file_name,
-            "created_at": post.created_at.isoformat()
+            "created_at": post.created_at.isoformat(),
+            "user_id": post.user_id
         }
 
     except ValueError:
