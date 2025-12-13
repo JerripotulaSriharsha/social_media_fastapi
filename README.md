@@ -7,6 +7,9 @@ A full-stack social media application built with FastAPI (backend) and React + T
 ### Login/Register Page
 ![Login Page](screenshots/login.png)
 
+### Feed with Posts
+![Feed Page](screenshots/posts.png)
+
 ## Features
 
 - 🔐 User authentication (Register/Login with JWT)
