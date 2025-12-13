@@ -2,6 +2,11 @@
 
 A full-stack social media application built with FastAPI (backend) and React + TypeScript (frontend).
 
+## Screenshots
+
+### Login/Register Page
+![Login Page](screenshots/login.png)
+
 ## Features
 
 - 🔐 User authentication (Register/Login with JWT)
