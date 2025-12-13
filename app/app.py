@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import PostCreate,RegisterIn,LoginIn
 from app.db import Post, create_db_and_tables, get_async_session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +22,15 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan = lifespan)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Vite's default port
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # text_posts = {
 #     1: {"title": "New Post", "content": "Cool test post"},
