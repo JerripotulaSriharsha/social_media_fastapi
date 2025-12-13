@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Depends
-from app.schemas import PostCreate #, PostResponse, UserRead, UserCreate, UserUpdate
+from app.schemas import PostCreate,RegisterIn,LoginIn
 from app.db import Post, create_db_and_tables, get_async_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
@@ -10,7 +10,10 @@ import shutil
 import os
 import uuid
 import tempfile
-# from app.users import auth_backend, current_active_user, fastapi_users
+from passlib.context import CryptContext
+from sqlalchemy import select
+from app.db import User
+from app.auth import create_access_token, get_current_user
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -18,7 +21,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan = lifespan)
-
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # text_posts = {
 #     1: {"title": "New Post", "content": "Cool test post"},
 #     2: {"title": "Python Tip", "content": "Use list comprehensions for cleaner loops."},
@@ -62,12 +65,38 @@ app = FastAPI(lifespan = lifespan)
     
 #     deleted_post = text_posts.pop(id)  # remove from dict and return it
 #     return deleted_post
+@app.post("/auth/register")
+async def register(data: RegisterIn, session: AsyncSession = Depends(get_async_session)):
+    result = await session.execute(select(User).where(User.email == data.email))
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    user = User(
+        email=data.email,
+        hashed_password=pwd_context.hash(data.password),
+        is_active=True,
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return {"id": str(user.id), "email": user.email}
+
+@app.post("/auth/login")
+async def login(data: LoginIn, session: AsyncSession = Depends(get_async_session)):
+    result = await session.execute(select(User).where(User.email == data.email))
+    user = result.scalars().first()
+    if not user or not pwd_context.verify(data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token(user.id)
+    return {"access_token": token, "token_type": "bearer"}
 
 @app.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
     caption: str = Form(""),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user)
 ):
     temp_file_path = None
     try:
@@ -108,7 +137,7 @@ async def upload_file(
 
 @app.get("/feed")
 async def get_feed(
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),user: User = Depends(get_current_user)
 ):
     result = await session.execute(
         select(Post).order_by(Post.created_at.desc())
@@ -136,7 +165,8 @@ async def update_post(
     post_id: str,
     caption: str = Form(None),
     file: UploadFile = File(None),
-    session: AsyncSession = Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user)
 ):
     """
     Update a post's caption and/or media file.
@@ -215,7 +245,7 @@ async def update_post(
 
 
 @app.delete("/posts/{post_id}")
-async def delete_post(post_id: str, session: AsyncSession = Depends(get_async_session)):
+async def delete_post(post_id: str, session: AsyncSession = Depends(get_async_session),user: User = Depends(get_current_user)):
     try:
         post_uuid = uuid.UUID(post_id)
 
